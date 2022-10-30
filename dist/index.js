@@ -22,6 +22,7 @@ var isBufferPng = function (buffer) {
 };
 exports.isBufferPng = isBufferPng;
 var getTextsFromBuffer = function (buffer) {
+    var _a, _b;
     var texts = [];
     var cur = 0x21;
     var state = "length";
@@ -39,7 +40,8 @@ var getTextsFromBuffer = function (buffer) {
             if (type === "tEXt" ||
                 type === "sRGB" ||
                 type === "pHYs" ||
-                type === "gAMA") {
+                type === "gAMA" ||
+                type === "iTXt") {
                 state = "data";
             }
             else {
@@ -47,10 +49,51 @@ var getTextsFromBuffer = function (buffer) {
             }
         }
         else if (state === "data") {
-            var data = new TextDecoder().decode(buffer.subarray(cur, cur + length));
-            cur += length;
             if (type === "tEXt") {
-                texts.push(data);
+                var initialCur = cur;
+                var finishCur = initialCur + length;
+                while (cur < finishCur) {
+                    cur += 1;
+                    if (buffer[cur] === 0) {
+                        break;
+                    }
+                }
+                var key = new TextDecoder().decode(buffer.subarray(initialCur, cur));
+                cur += 1;
+                var value = new TextDecoder().decode(buffer.subarray(cur, finishCur));
+                cur = finishCur;
+                texts.push((_a = {}, _a[key] = value, _a));
+            }
+            else if (type === "iTXt") {
+                var initialCur = cur;
+                var finishCur = initialCur + length;
+                while (cur < finishCur) {
+                    cur += 1;
+                    if (buffer[cur] === 0) {
+                        break;
+                    }
+                }
+                var key = new TextDecoder().decode(buffer.subarray(initialCur, cur));
+                cur += 2;
+                while (cur < finishCur) {
+                    cur += 1;
+                    if (buffer[cur] === 0) {
+                        break;
+                    }
+                }
+                while (cur < finishCur) {
+                    cur += 1;
+                    if (buffer[cur] === 0) {
+                        break;
+                    }
+                }
+                cur += 1;
+                var value = new TextDecoder().decode(buffer.subarray(cur, finishCur));
+                cur = finishCur;
+                texts.push((_b = {}, _b[key] = value, _b));
+            }
+            else {
+                cur += length;
             }
             state = "CRC";
         }

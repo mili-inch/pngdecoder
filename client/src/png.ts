@@ -8,8 +8,10 @@ export const isBufferPng = (buffer: Uint8Array): boolean => {
   return true;
 };
 
-export const getTextsFromBuffer = (buffer: Uint8Array): string[] => {
-  const texts: string[] = [];
+export const getTextsFromBuffer = (
+  buffer: Uint8Array,
+): { [key: string]: string }[] => {
+  const texts: { [key: string]: string }[] = [];
   let cur = 0x21;
   let state: "length" | "type" | "data" | "CRC" = "length";
   let type = "";
@@ -29,17 +31,58 @@ export const getTextsFromBuffer = (buffer: Uint8Array): string[] => {
         type === "tEXt" ||
         type === "sRGB" ||
         type === "pHYs" ||
-        type === "gAMA"
+        type === "gAMA" ||
+        type === "iTXt"
       ) {
         state = "data";
       } else {
         break;
       }
     } else if (state === "data") {
-      const data = new TextDecoder().decode(buffer.subarray(cur, cur + length));
-      cur += length;
       if (type === "tEXt") {
-        texts.push(data);
+        const initialCur = cur;
+        const finishCur = initialCur + length;
+        while (cur < finishCur) {
+          cur += 1;
+          if (buffer[cur] === 0) {
+            break;
+          }
+        }
+        const key = new TextDecoder().decode(buffer.subarray(initialCur, cur));
+        cur += 1;
+        const value = new TextDecoder().decode(buffer.subarray(cur, finishCur));
+        cur = finishCur;
+        texts.push({ [key]: value });
+      } else if (type === "iTXt") {
+        const initialCur = cur;
+        const finishCur = initialCur + length;
+        while (cur < finishCur) {
+          cur += 1;
+          if (buffer[cur] === 0) {
+            break;
+          }
+        }
+        const key = new TextDecoder().decode(buffer.subarray(initialCur, cur));
+        cur += 2;
+        while (cur < finishCur) {
+          cur += 1;
+          if (buffer[cur] === 0) {
+            break;
+          }
+        }
+        while (cur < finishCur) {
+          cur += 1;
+          if (buffer[cur] === 0) {
+            break;
+          }
+        }
+
+        cur += 1;
+        const value = new TextDecoder().decode(buffer.subarray(cur, finishCur));
+        cur = finishCur;
+        texts.push({ [key]: value });
+      } else {
+        cur += length;
       }
       state = "CRC";
     } else if (state === "CRC") {
