@@ -10,7 +10,7 @@
 
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.isAutomatic1111Texts = exports.isNovelAiTexts = exports.getTextsFromBuffer = exports.isBufferPng = void 0;
+exports.parseAutomatic1111Texts = exports.parseNovelAiTexts = exports.isAutomatic1111Texts = exports.isNovelAiTexts = exports.parseBuffer = exports.isBufferPng = void 0;
 var isBufferPng = function (buffer) {
     var sign = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
     for (var i = 0; i < sign.length; i++) {
@@ -21,7 +21,7 @@ var isBufferPng = function (buffer) {
     return true;
 };
 exports.isBufferPng = isBufferPng;
-var getTextsFromBuffer = function (buffer) {
+var parseBuffer = function (buffer) {
     var _a, _b;
     var texts = [];
     var cur = 0x21;
@@ -107,35 +107,62 @@ var getTextsFromBuffer = function (buffer) {
     }
     return texts;
 };
-exports.getTextsFromBuffer = getTextsFromBuffer;
+exports.parseBuffer = parseBuffer;
 var isNovelAiTexts = function (texts) {
-    if (texts.length < 5) {
-        return false;
+    if (texts.some(function (x) {
+        return Object.keys(x)[0] === "Software" && Object.values(x)[0] === "NovelAI";
+    })) {
+        return true;
     }
-    var text = texts[2];
-    if (text === undefined) {
-        return false;
-    }
-    if (!text.startsWith("Software\x00NovelAI")) {
-        return false;
-    }
-    return true;
+    return false;
 };
 exports.isNovelAiTexts = isNovelAiTexts;
 var isAutomatic1111Texts = function (texts) {
-    if (texts.length !== 1) {
-        return false;
+    if (texts.some(function (x) { return Object.keys(x)[0] === "parameters"; })) {
+        return true;
     }
-    var text = texts[0];
-    if (text === undefined) {
-        return false;
-    }
-    if (!text.startsWith("parameters")) {
-        return false;
-    }
-    return true;
+    return false;
 };
 exports.isAutomatic1111Texts = isAutomatic1111Texts;
+var parseNovelAiTexts = function (texts) {
+    var _a, _b;
+    var commentText = (_a = texts.find(function (x) { return Object.keys(x)[0] === "Comment"; })) === null || _a === void 0 ? void 0 : _a["Comment"];
+    var comment = commentText
+        ? JSON.parse(commentText)
+        : {};
+    var prompt = ((_b = texts.find(function (x) { return Object.keys(x)[0] === "Description"; })) === null || _b === void 0 ? void 0 : _b["Description"]) ||
+        "";
+    var negativePrompt = comment["uc"] || "";
+    var settings = Object.keys(comment)
+        .filter(function (x) { return x !== "uc"; })
+        .reduce(function (acc, key) {
+        acc[key] = comment[key];
+        return acc;
+    }, {});
+    return { source: "NovelAI", prompt: prompt, negativePrompt: negativePrompt, settings: settings };
+};
+exports.parseNovelAiTexts = parseNovelAiTexts;
+var parseAutomatic1111Texts = function (texts) {
+    var _a, _b, _c;
+    var parametersText = (_a = texts.find(function (x) { return Object.keys(x)[0] === "parameters"; })) === null || _a === void 0 ? void 0 : _a["parameters"];
+    var parameters = parametersText === null || parametersText === void 0 ? void 0 : parametersText.split("\n");
+    var prompt = (parameters === null || parameters === void 0 ? void 0 : parameters[0]) || "";
+    var negativePrompt = ((_b = parameters === null || parameters === void 0 ? void 0 : parameters[1]) === null || _b === void 0 ? void 0 : _b.replace(/^Negative prompt: /, "")) || "";
+    var settings = {};
+    (_c = parameters === null || parameters === void 0 ? void 0 : parameters[2]) === null || _c === void 0 ? void 0 : _c.split(", ").forEach(function (x) {
+        var _a = x.split(": "), key = _a[0], value = _a[1];
+        if (key !== undefined && value !== undefined) {
+            settings[key] = value;
+        }
+    });
+    return {
+        source: "Automatic1111",
+        prompt: prompt,
+        negativePrompt: negativePrompt,
+        settings: settings,
+    };
+};
+exports.parseAutomatic1111Texts = parseAutomatic1111Texts;
 
 
 /***/ })
@@ -191,8 +218,19 @@ var onFileSelected = function (files) {
         if (!(0, png_1.isBufferPng)(arr)) {
             return;
         }
-        var texts = (0, png_1.getTextsFromBuffer)(arr);
-        result.textContent = JSON.stringify(texts);
+        var texts = (0, png_1.parseBuffer)(arr);
+        if ((0, png_1.isNovelAiTexts)(texts)) {
+            var description = (0, png_1.parseNovelAiTexts)(texts);
+            result.textContent = JSON.stringify(description);
+        }
+        else if ((0, png_1.isAutomatic1111Texts)(texts)) {
+            var description = (0, png_1.parseAutomatic1111Texts)(texts);
+            result.textContent = JSON.stringify(description);
+        }
+        else {
+            result.textContent = JSON.stringify(texts);
+        }
+        result.textContent += JSON.stringify(texts);
     };
 };
 button_upload.addEventListener("change", function (e) {

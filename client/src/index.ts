@@ -1,4 +1,11 @@
-import { isBufferPng, getTextsFromBuffer } from "./png";
+import {
+  isBufferPng,
+  parseBuffer,
+  isNovelAiTexts,
+  isAutomatic1111Texts,
+  parseNovelAiTexts,
+  parseAutomatic1111Texts,
+} from "./png";
 
 const button_upload = document.getElementById("button_upload")!;
 const result = document.getElementById("result")!;
@@ -15,8 +22,17 @@ const onFileSelected = (files: FileList) => {
     if (!isBufferPng(arr)) {
       return;
     }
-    const texts = getTextsFromBuffer(arr);
-    result.textContent = JSON.stringify(texts);
+    const texts = parseBuffer(arr);
+    if (isNovelAiTexts(texts)) {
+      const description = parseNovelAiTexts(texts);
+      result.textContent = JSON.stringify(description);
+    } else if (isAutomatic1111Texts(texts)) {
+      const description = parseAutomatic1111Texts(texts);
+      result.textContent = JSON.stringify(description);
+    } else {
+      result.textContent = JSON.stringify(texts);
+    }
+    result.textContent += JSON.stringify(texts);
   };
 };
 

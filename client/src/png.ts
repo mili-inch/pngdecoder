@@ -1,3 +1,10 @@
+type ImageDescription = {
+  source: string;
+  prompt: string;
+  negativePrompt: string;
+  settings: { [key: string]: any };
+};
+
 export const isBufferPng = (buffer: Uint8Array): boolean => {
   const sign = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
   for (let i = 0; i < sign.length; i++) {
@@ -8,7 +15,7 @@ export const isBufferPng = (buffer: Uint8Array): boolean => {
   return true;
 };
 
-export const getTextsFromBuffer = (
+export const parseBuffer = (
   buffer: Uint8Array,
 ): { [key: string]: string }[] => {
   const texts: { [key: string]: string }[] = [];
@@ -96,30 +103,70 @@ export const getTextsFromBuffer = (
   return texts;
 };
 
-export const isNovelAiTexts = (texts: string[]): boolean => {
-  if (texts.length < 5) {
-    return false;
+export const isNovelAiTexts = (texts: { [key: string]: string }[]): boolean => {
+  if (
+    texts.some(
+      (x) =>
+        Object.keys(x)[0] === "Software" && Object.values(x)[0] === "NovelAI",
+    )
+  ) {
+    return true;
   }
-  const text = texts[2];
-  if (text === undefined) {
-    return false;
-  }
-  if (!text.startsWith("Software\x00NovelAI")) {
-    return false;
-  }
-  return true;
+  return false;
 };
 
-export const isAutomatic1111Texts = (texts: string[]): boolean => {
-  if (texts.length !== 1) {
-    return false;
+export const isAutomatic1111Texts = (
+  texts: { [key: string]: string }[],
+): boolean => {
+  if (texts.some((x) => Object.keys(x)[0] === "parameters")) {
+    return true;
   }
-  const text = texts[0];
-  if (text === undefined) {
-    return false;
-  }
-  if (!text.startsWith("parameters")) {
-    return false;
-  }
-  return true;
+  return false;
+};
+
+export const parseNovelAiTexts = (
+  texts: { [key: string]: string }[],
+): ImageDescription => {
+  const commentText = texts.find((x) => Object.keys(x)[0] === "Comment")?.[
+    "Comment"
+  ];
+  const comment: { [key: string]: any } = commentText
+    ? JSON.parse(commentText)
+    : {};
+  const prompt =
+    texts.find((x) => Object.keys(x)[0] === "Description")?.["Description"] ||
+    "";
+  const negativePrompt = (comment["uc"] as string) || "";
+  const settings = Object.keys(comment)
+    .filter((x) => x !== "uc")
+    .reduce((acc, key) => {
+      acc[key] = comment[key];
+      return acc;
+    }, {} as { [key: string]: any });
+  return { source: "NovelAI", prompt, negativePrompt, settings };
+};
+
+export const parseAutomatic1111Texts = (
+  texts: { [key: string]: string }[],
+): ImageDescription => {
+  const parametersText = texts.find(
+    (x) => Object.keys(x)[0] === "parameters",
+  )?.["parameters"];
+  const parameters = parametersText?.split("\n");
+  const prompt = parameters?.[0] || "";
+  const negativePrompt =
+    parameters?.[1]?.replace(/^Negative prompt: /, "") || "";
+  const settings: { [key: string]: string } = {};
+  parameters?.[2]?.split(", ").forEach((x) => {
+    const [key, value] = x.split(": ");
+    if (key !== undefined && value !== undefined) {
+      settings[key] = value;
+    }
+  });
+  return {
+    source: "Automatic1111",
+    prompt,
+    negativePrompt,
+    settings,
+  };
 };
